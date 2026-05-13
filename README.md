@@ -146,3 +146,36 @@ on storage.objects
 for select
 using (bucket_id = 'quote-pdfs');
 ```
+
+## Uso rápido como dependencia Git (gratis)
+
+Si quieres reutilizar las funciones del proyecto sin publicar un paquete, puedes añadir el repositorio directamente como dependencia Git.
+
+1. En el `package.json` del proyecto destino añade:
+
+```json
+"dependencies": {
+	"presuclic-webpdf": "github:pitonC/PresuClicWebPDF"
+}
+```
+
+2. Instala dependencias:
+
+```bash
+pnpm install
+```
+
+3. Importa lo que necesites en tu código:
+
+```ts
+import { generateQuotePDF, uploadPDFToStorage } from 'presuclic-webpdf'
+
+// Uso de ejemplo
+const pdf = await generateQuotePDF(data)
+await uploadPDFToStorage(pdf, userId, clientName)
+```
+
+Notas:
+- Asegúrate de definir las variables de entorno `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, etc., en el proyecto destino.
+- Si solo necesitas copiar archivos, puedes copiar `lib/pdf-generator.ts` y `lib/supabase/*` al otro proyecto y ajustar imports.
+
