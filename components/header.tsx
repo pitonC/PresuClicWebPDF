@@ -1,6 +1,6 @@
 "use client"
 
-import { History, User, LogOut } from "lucide-react"
+import { History, User, LogOut, Settings } from "lucide-react"
 import { useState, useEffect } from "react"
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
@@ -8,9 +8,10 @@ import type { User as SupabaseUser } from "@supabase/supabase-js"
 
 interface HeaderProps {
   onHistoryClick?: () => void
+  onSettingsClick?: () => void
 }
 
-export function Header({ onHistoryClick }: HeaderProps) {
+export function Header({ onHistoryClick, onSettingsClick }: HeaderProps) {
   const [user, setUser] = useState<SupabaseUser | null>(null)
   const [showMenu, setShowMenu] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -93,6 +94,14 @@ export function Header({ onHistoryClick }: HeaderProps) {
             <History className="h-5 w-5 text-foreground sm:h-6 sm:w-6" />
           </button>
           
+          <button
+            onClick={onSettingsClick}
+            className="h-11 w-11 flex items-center justify-center bg-secondary hover:bg-secondary/80 active:scale-95 rounded-xl transition-all touch-manipulation sm:h-12 sm:w-12"
+            aria-label="Configuración"
+          >
+            <Settings className="h-5 w-5 text-foreground sm:h-6 sm:w-6" />
+          </button>
+          
           {/* User menu */}
           <div className="relative">
             {isLoading ? (
@@ -133,8 +142,28 @@ export function Header({ onHistoryClick }: HeaderProps) {
                         </p>
                       </div>
                       <button
+                        onClick={() => {
+                          setShowMenu(false)
+                          onHistoryClick?.()
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-3 text-sm text-foreground hover:bg-secondary/60 transition-colors"
+                      >
+                        <History className="h-4 w-4" />
+                        Registros
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowMenu(false)
+                          onSettingsClick?.()
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-3 text-sm text-foreground hover:bg-secondary/60 transition-colors border-t border-border"
+                      >
+                        <Settings className="h-4 w-4" />
+                        Configuración
+                      </button>
+                      <button
                         onClick={handleLogout}
-                        className="w-full flex items-center gap-3 px-3 py-3 text-sm text-red-500 hover:bg-red-500/10 transition-colors"
+                        className="w-full flex items-center gap-3 px-3 py-3 text-sm text-red-500 hover:bg-red-500/10 transition-colors border-t border-border"
                       >
                         <LogOut className="h-4 w-4" />
                         Cerrar sesion

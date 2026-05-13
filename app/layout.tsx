@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { SettingsProvider } from '@/lib/settings-context'
 import './globals.css'
 
 const inter = Inter({ 
@@ -11,7 +12,6 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'PresuClic - Presupuestos Rápidos',
   description: 'Genera presupuestos profesionales en segundos y envíalos por WhatsApp',
-  generator: 'v0.app',
   icons: {
     icon: [
       {
@@ -47,7 +47,9 @@ export default function RootLayout({
   return (
     <html lang="es" className="bg-background">
       <body className={`${inter.variable} font-sans antialiased bg-background text-foreground`}>
-        {children}
+        <SettingsProvider>
+          {children}
+        </SettingsProvider>
         <Analytics />
       </body>
     </html>

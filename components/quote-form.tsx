@@ -41,6 +41,14 @@ export function QuoteForm({ onSubmit, isLoading, initialConcepto = "" }: QuoteFo
   const total = manoObra + materiales
   const saldo = total - anticipo
 
+  // Validar que todos los campos estén completos
+  const isFormValid = 
+    nombreCliente.trim().length > 0 &&
+    telefonoCliente.length >= 10 &&
+    concepto.trim().length > 0 &&
+    manoObra > 0 &&
+    materiales > 0
+
   const incrementValue = useCallback((setter: React.Dispatch<React.SetStateAction<number>>) => {
     setter(prev => prev + 500)
   }, [])
@@ -165,10 +173,10 @@ export function QuoteForm({ onSubmit, isLoading, initialConcepto = "" }: QuoteFo
             </div>
             <div className="flex-1 text-left">
               <p className={`text-sm font-semibold sm:text-base ${enviarCopiaPersonal ? 'text-primary' : 'text-foreground'}`}>
-                Guardar copia en mi WhatsApp
+                Compartir o descargar copia PDF
               </p>
               <p className="text-xs text-muted-foreground sm:text-sm">
-                Recibe el presupuesto en tu propio telefono
+                Guarda el archivo para enviarlo o revisarlo después
               </p>
             </div>
           </button>
@@ -336,15 +344,19 @@ export function QuoteForm({ onSubmit, isLoading, initialConcepto = "" }: QuoteFo
 
       {/* Floating Action Button */}
       <div className="fixed bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-background via-background to-transparent pt-8 sm:p-4 z-50">
-        {!concepto.trim() && (
+        {!isFormValid && (
           <p className="text-center text-sm text-muted-foreground mb-2 sm:text-base">
-            Describe el trabajo para continuar
+            {!nombreCliente.trim() && "Ingresa el nombre del cliente"}
+            {nombreCliente.trim() && telefonoCliente.length < 10 && "Teléfono debe tener mínimo 10 dígitos"}
+            {nombreCliente.trim() && telefonoCliente.length >= 10 && !concepto.trim() && "Describe el trabajo para continuar"}
+            {nombreCliente.trim() && telefonoCliente.length >= 10 && concepto.trim() && manoObra === 0 && "Agrega el costo de mano de obra"}
+            {nombreCliente.trim() && telefonoCliente.length >= 10 && concepto.trim() && manoObra > 0 && materiales === 0 && "Agrega el costo de materiales"}
           </p>
         )}
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={!concepto.trim() || isLoading}
+          disabled={!isFormValid || isLoading}
           className="w-full h-20 flex items-center justify-center gap-3 bg-primary hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 rounded-2xl text-primary-foreground font-bold text-base shadow-lg shadow-primary/30 transition-all touch-manipulation sm:h-22 sm:text-xl sm:gap-4"
         >
           {isLoading ? (

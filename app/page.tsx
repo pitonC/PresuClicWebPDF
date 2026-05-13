@@ -5,6 +5,12 @@ import { Header } from "@/components/header"
 import { QuickActions } from "@/components/quick-actions"
 import { QuoteForm } from "@/components/quote-form"
 import { SuccessModal } from "@/components/success-modal"
+import { RecordsDrawer } from "@/components/records-drawer"
+import { SettingsDrawer } from "@/components/settings-drawer"
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/client"
+import { listRecentQuoteRecords, saveQuoteRecord, deleteQuoteRecord, type QuoteRecord } from "@/lib/supabase/quote-records"
+import { downloadPDF, generateQuotePDF } from "@/lib/pdf-generator"
+import { uploadPDFToStorage } from "@/lib/supabase/pdf-storage"
 
 interface QuoteData {
   nombreCliente: string
@@ -22,6 +28,11 @@ export default function PresuClicApp() {
   const [isLoading, setIsLoading] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [selectedTemplate, setSelectedTemplate] = useState("")
+  const [showRecords, setShowRecords] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [records, setRecords] = useState<QuoteRecord[]>([])
+  const [recordsLoading, setRecordsLoading] = useState(false)
+  const [recordsError, setRecordsError] = useState<string | null>(null)
 
   const handleTemplateSelect = useCallback((template: string) => {
     setSelectedTemplate(template)
@@ -34,27 +45,103 @@ export default function PresuClicApp() {
     }, 100)
   }, [])
 
+  const refreshRecords = useCallback(async () => {
+    if (!isSupabaseConfigured()) {
+      setRecords([])
+      setRecordsError('Configura Supabase para guardar y leer registros.')
+      return
+    }
+
+    setRecordsLoading(true)
+    setRecordsError(null)
+
+    try {
+      const { data, error } = await listRecentQuoteRecords(10)
+      if (error) throw error
+      setRecords(data)
+    } catch (error: unknown) {
+      setRecords([])
+      setRecordsError(error instanceof Error ? error.message : 'No se pudieron cargar los registros')
+    } finally {
+      setRecordsLoading(false)
+    }
+  }, [])
+
+  const handleOpenRecords = useCallback(async () => {
+    setShowRecords(true)
+    await refreshRecords()
+  }, [refreshRecords])
+
+  const handleDeleteRecord = useCallback(async (id: string) => {
+    try {
+      const { error } = await deleteQuoteRecord(id)
+      if (error) {
+        console.error('Failed to delete record:', error)
+        throw error
+      }
+      await refreshRecords()
+    } catch (err) {
+      console.error('Failed to delete record:', err)
+    }
+  }, [refreshRecords])
+
   const handleSubmit = useCallback(async (data: QuoteData) => {
     setIsLoading(true)
     
-    // Simulate PDF generation and WhatsApp preparation
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    // Format the WhatsApp message
-    const total = data.manoObra + data.materiales
-    const saldo = total - data.anticipo
-    
-    const formatCurrency = (value: number) => {
-      const formattedNumber = new Intl.NumberFormat('es-MX').format(value)
-      return `${data.simboloMoneda}${formattedNumber}`
-    }
+    try {
+      // Calculate totals
+      const total = data.manoObra + data.materiales
+      const saldo = total - data.anticipo
+      
+      const clientName = data.nombreCliente.trim() || "Cliente"
+      const safeFileName = clientName.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'presupuesto'
 
-    const clientName = data.nombreCliente.trim() || "Cliente"
-    
-    const message = `
+      // Generate PDF
+      const pdfBlob = await generateQuotePDF({
+        clientName: clientName,
+        clientPhone: data.telefonoCliente,
+        countrCode: data.codigoPais,
+        currencySymbol: data.simboloMoneda,
+        concept: data.concepto,
+        workAmount: data.manoObra,
+        materialsAmount: data.materiales,
+        depositAmount: data.anticipo,
+        totalAmount: total,
+        balanceAmount: saldo,
+      })
+
+      const pdfFile = new File([pdfBlob], `${safeFileName}_presupuesto.pdf`, {
+        type: 'application/pdf',
+      })
+
+      // Get user ID from Supabase if configured
+      let pdfUrl = ""
+      
+      if (isSupabaseConfigured()) {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        
+        if (user) {
+          // Upload PDF to Supabase Storage
+          try {
+            pdfUrl = await uploadPDFToStorage(pdfBlob, user.id, clientName)
+          } catch (uploadError) {
+            console.error('Error uploading PDF:', uploadError)
+            // Continue without PDF URL if upload fails
+          }
+        }
+      }
+
+      // Create WhatsApp message with PDF link
+      const formatCurrency = (value: number) => {
+        const formattedNumber = new Intl.NumberFormat('es-MX').format(value)
+        return `${data.simboloMoneda}${formattedNumber}`
+      }
+
+      let message = `
 *PRESUPUESTO - PresuClic*
 
-*Cotizacion para:* ${clientName}
+*Cotización para:* ${clientName}
 
 *Concepto:*
 ${data.concepto}
@@ -71,30 +158,69 @@ _Gracias por su preferencia_
 _Presupuesto generado con PresuClic_
 `.trim()
 
-    // Create WhatsApp URL - use client's phone with country code if provided
-    const phoneNumber = data.telefonoCliente.length >= 10 
-      ? `${data.codigoPais}${data.telefonoCliente}`
-      : ""
-    
-    // URL for client (or general if no phone)
-    const whatsappUrlCliente = phoneNumber 
-      ? `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`
-      : `https://wa.me/?text=${encodeURIComponent(message)}`
-    
-    // URL for personal copy (opens WhatsApp without a specific number so user can send to themselves or saved contacts)
-    const whatsappUrlPersonal = `https://wa.me/?text=${encodeURIComponent(message)}`
-    
-    setIsLoading(false)
-    setShowSuccess(true)
-    
-    // Open WhatsApp for client first
-    window.open(whatsappUrlCliente, '_blank')
-    
-    // If user wants a personal copy, open another WhatsApp window after a short delay
-    if (data.enviarCopiaPersonal) {
-      setTimeout(() => {
-        window.open(whatsappUrlPersonal, '_blank')
-      }, 1000)
+      // Add PDF link if available
+      if (pdfUrl) {
+        message += `\n\n📄 *Presupuesto en PDF:*\n${pdfUrl}`
+      }
+
+      const phoneDigits = `${data.codigoPais}${data.telefonoCliente}`.replace(/\D/g, '')
+      const hasValidPhone = phoneDigits.length >= 10
+
+      // Create WhatsApp URLs
+      const whatsappUrlCliente = hasValidPhone
+        ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(message)}`
+        : `https://wa.me/?text=${encodeURIComponent(message)}`
+
+      // Save to database if Supabase is configured
+      if (isSupabaseConfigured()) {
+        try {
+          await saveQuoteRecord({
+            clientName: clientName,
+            clientPhone: data.telefonoCliente,
+            countryCode: data.codigoPais,
+            currencySymbol: data.simboloMoneda,
+            concept: data.concepto,
+            workAmount: data.manoObra,
+            materialsAmount: data.materiales,
+            depositAmount: data.anticipo,
+            totalAmount: total,
+            balanceAmount: saldo,
+            copyToSelf: data.enviarCopiaPersonal,
+            whatsappUrl: whatsappUrlCliente,
+            pdfUrl: pdfUrl || undefined,
+          })
+        } catch (saveError) {
+          console.error('Error saving quote record:', saveError)
+          // Continue even if save fails
+        }
+      }
+
+      setIsLoading(false)
+      setShowSuccess(true)
+
+      // Only download PDF if user checked the checkbox
+      if (data.enviarCopiaPersonal) {
+        downloadPDF(pdfBlob, `${safeFileName}_presupuesto.pdf`)
+      }
+
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(message)
+        } catch (clipboardError) {
+          console.error('No se pudo copiar el mensaje:', clipboardError)
+        }
+      }
+
+      window.open(whatsappUrlCliente, '_blank')
+    } catch (error) {
+      console.error('Error in handleSubmit:', error)
+      setIsLoading(false)
+      // Still show success modal even if there's an error
+      setShowSuccess(true)
+      
+      // Try to open WhatsApp anyway with a fallback message
+      const fallbackMessage = `Presupuesto para ${data.nombreCliente}`
+      window.open(`https://wa.me/?text=${encodeURIComponent(fallbackMessage)}`, '_blank')
     }
   }, [])
 
@@ -105,9 +231,13 @@ _Presupuesto generado con PresuClic_
     window.location.reload()
   }, [])
 
+  const handleOpenSettings = useCallback(() => {
+    setShowSettings(true)
+  }, [])
+
   return (
     <main className="min-h-screen bg-background">
-      <Header />
+      <Header onHistoryClick={handleOpenRecords} onSettingsClick={handleOpenSettings} />
       
       <QuickActions onSelect={handleTemplateSelect} />
       
@@ -121,6 +251,20 @@ _Presupuesto generado con PresuClic_
         isOpen={showSuccess}
         onClose={() => setShowSuccess(false)}
         onNewQuote={handleNewQuote}
+      />
+
+      <RecordsDrawer
+        open={showRecords}
+        onOpenChange={setShowRecords}
+        records={records}
+        isLoading={recordsLoading}
+        errorMessage={recordsError}
+        onDeleteRecord={handleDeleteRecord}
+      />
+
+      <SettingsDrawer
+        open={showSettings}
+        onOpenChange={setShowSettings}
       />
     </main>
   )
