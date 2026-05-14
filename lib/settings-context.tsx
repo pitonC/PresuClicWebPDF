@@ -132,7 +132,12 @@ function applyFontSettings(fontSize: FontSize, fontFamily: FontFamily) {
 
   // Set CSS custom property for font family
   html.style.setProperty('--font-sans', fontMap[fontFamily])
-  html.style.fontFamily = fontMap[fontFamily]
+  
+  // Force font application on html and body with !important to override Tailwind classes
+  html.style.setProperty('font-family', fontMap[fontFamily], 'important')
+  if (document.body) {
+    document.body.style.setProperty('font-family', fontMap[fontFamily], 'important')
+  }
   
   // Force a reflow to apply font changes
   void html.offsetHeight

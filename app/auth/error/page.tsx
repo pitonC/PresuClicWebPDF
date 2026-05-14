@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 
@@ -36,16 +35,7 @@ export default function AuthErrorPage() {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md text-center">
-        {/* Logo */}
-        <div className="flex flex-col items-center mb-8">
-          <Image 
-            src="/images/presuclic-logo.png" 
-            alt="PresuClic Logo" 
-            width={80} 
-            height={80}
-            className="rounded-full mb-4"
-          />
-        </div>
+        {/* Logo removed by request */}
 
         {/* Card */}
         <Suspense fallback={<div className="bg-card border-2 border-border rounded-2xl p-6 sm:p-8 animate-pulse h-48" />}>
